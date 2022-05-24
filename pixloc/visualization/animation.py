@@ -77,6 +77,9 @@ class VideoWriter:
         frames = self.tmp_dir / f'*{self.ext}'
         logger.info('Running ffmpeg.')
         (
+            import ffmpeg
+            print("ffmpeg impoerted")
+            
             ffmpeg
             .input(frames, pattern_type='glob', framerate=fps)
             .filter('crop', 'trunc(iw/2)*2', 'trunc(ih/2)*2')

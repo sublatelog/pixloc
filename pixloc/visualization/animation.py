@@ -17,8 +17,11 @@ from ..utils.quaternions import rotmat2qvec
 logger = logging.getLogger(__name__)
 try:
     import ffmpeg
+    print("ffmpeg impoerted")
 except ImportError:
     logger.info('Cannot import ffmpeg.')
+    
+    print("ffmpeg not impoerted")
 
 
 def subsample_steps(T_w2q: Pose, p2d_q: np.ndarray, mask_q: np.ndarray,

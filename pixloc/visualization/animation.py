@@ -15,6 +15,7 @@ from ..pixlib.geometry import Pose, Camera
 from ..utils.quaternions import rotmat2qvec
 
 logger = logging.getLogger(__name__)
+
 try:
     import ffmpeg
     print("ffmpeg impoerted")
@@ -54,6 +55,8 @@ def subsample_steps(T_w2q: Pose, p2d_q: np.ndarray, mask_q: np.ndarray,
     return keep
 
 
+
+
 class VideoWriter:
     """Write frames sequentially as images, create a video, and clean up."""
     def __init__(self, tmp_dir: Path, ext='.jpg'):
@@ -69,17 +72,22 @@ class VideoWriter:
         plt.close()
         self.count += 1
 
-    def to_video(self, out_path: Path, duration: Optional[float] = None,
-                 fps: int = 5, crf: int = 23, verbose: bool = False):
+    def to_video(self, 
+                 out_path: Path, 
+                 duration: Optional[float] = None,
+                 fps: int = 5, 
+                 crf: int = 23, 
+                 verbose: bool = False
+                ):
+        
         assert self.count > 0
+        
         if duration is not None:
             fps = self.count / duration
+            
         frames = self.tmp_dir / f'*{self.ext}'
         logger.info('Running ffmpeg.')
         (
-            import ffmpeg
-            print("ffmpeg impoerted")
-            
             ffmpeg
             .input(frames, pattern_type='glob', framerate=fps)
             .filter('crop', 'trunc(iw/2)*2', 'trunc(ih/2)*2')

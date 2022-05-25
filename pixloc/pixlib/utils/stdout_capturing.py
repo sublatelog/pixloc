@@ -58,6 +58,7 @@ def flush():
 # http://eli.thegreenplace.net/2015/redirecting-all-kinds-of-stdout-in-python/
 # http://stackoverflow.com/a/651718/1388435
 # http://stackoverflow.com/a/22434262/1388435
+
 @contextmanager
 def capture_outputs(filename):
     """Duplicate stdout and stderr to a file on the file descriptor level."""
@@ -71,11 +72,20 @@ def capture_outputs(filename):
         saved_stderr_fd = os.dup(original_stderr_fd)
 
         tee_stdout = subprocess.Popen(
-            ['tee', '-a', '-i', '/dev/stderr'], start_new_session=True,
-            stdin=subprocess.PIPE, stderr=target_fd, stdout=1)
+                                        ['tee', '-a', '-i', '/dev/stderr'], 
+                                        start_new_session=True,
+                                        stdin=subprocess.PIPE, 
+                                        stderr=target_fd, 
+                                        stdout=1
+                                     )
+        
         tee_stderr = subprocess.Popen(
-            ['tee', '-a', '-i', '/dev/stderr'], start_new_session=True,
-            stdin=subprocess.PIPE, stderr=target_fd, stdout=2)
+                                        ['tee', '-a', '-i', '/dev/stderr'], 
+                                        start_new_session=True,
+                                        stdin=subprocess.PIPE, 
+                                        stderr=target_fd, 
+                                        stdout=2
+                                    )
 
         flush()
         os.dup2(tee_stdout.stdin.fileno(), original_stdout_fd)
@@ -114,6 +124,8 @@ def capture_outputs(filename):
     # Cleanup log file
     with open(str(filename), 'r') as target:
         text = target.read()
+        
     text = apply_backspaces_and_linefeeds(text)
+    
     with open(str(filename), 'w') as target:
         target.write(text)

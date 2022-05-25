@@ -61,8 +61,15 @@ def get_class(mod_name, base_path, BaseClass):
     # Filter classes defined in the module
     classes = [c for c in classes if c[1].__module__ == mod_path]
     
+    print("classes_0")
+    print(classes)
+    
     # Filter classes inherited from BaseModel
     classes = [c for c in classes if issubclass(c[1], BaseClass)]
+    
+    
+    print("classes_1")
+    print(classes)
     
     assert len(classes) == 1, classes
     

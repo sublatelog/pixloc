@@ -55,6 +55,7 @@ def get_class(mod_name, base_path, BaseClass):
     mod_path = '{}.{}'.format(base_path, mod_name) # models.two_view_refiner
     mod = __import__(mod_path, fromlist=[''])
     
+    # inspect.getmembers():クラスやモジュールなどのオブジェクトからメンバーを取得
     classes = inspect.getmembers(mod, inspect.isclass)
     
     # Filter classes defined in the module

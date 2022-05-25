@@ -72,10 +72,11 @@ class UNet(BaseModel):
     std = [0.229, 0.224, 0.225]
 
     def build_encoder(self, conf):
-        assert isinstance(conf.encoder, str)
-        Encoder = getattr(torchvision.models, conf.encoder)
+        assert isinstance(conf.encoder, str) # vgg16
+        
+        Encoder = getattr(torchvision.models, conf.encoder) # vgg16
         encoder = Encoder(pretrained=True)
-        Block = checkpointed(torch.nn.Sequential, do=conf.checkpointed)
+        Block = checkpointed(torch.nn.Sequential, do=conf.checkpointed) # checkpointed: true
 
         if conf.encoder.startswith('vgg'):
             # Parse the layers and pack them into downsampling blocks
@@ -146,6 +147,7 @@ class UNet(BaseModel):
         # Decoder
         if conf.decoder is not None:
             assert len(conf.decoder) == (len(skip_dims) - 1)
+            
             Block = checkpointed(DecoderBlock, do=conf.checkpointed)
             norm = eval(conf.decoder_norm) if conf.decoder_norm else None
 
@@ -176,6 +178,7 @@ class UNet(BaseModel):
 
             block = AdaptationBlock(input_, dim)
             adaptation.append(block)
+            
             if conf.compute_uncertainty:
                 uncertainty.append(AdaptationBlock(input_, 1))
                 

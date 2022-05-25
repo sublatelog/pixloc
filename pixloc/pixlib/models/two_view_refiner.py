@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class TwoViewRefiner(BaseModel):
+    
     default_conf = {
         'extractor': {
             'name': 's2dnet',
@@ -33,40 +34,51 @@ class TwoViewRefiner(BaseModel):
         # deprecated entries
         'init_target_offset': None,
     }
+    
+    
     required_data_keys = {
         'ref': ['image', 'camera', 'T_w2cam'],
         'query': ['image', 'camera', 'T_w2cam'],
     }
+    
+    
     strict_conf = False  # need to pass new confs to children models
 
     def _init(self, conf):
+        
+        # extractor ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ----------
         self.extractor = get_model(conf.extractor.name)(conf.extractor)
+        
         assert hasattr(self.extractor, 'scales')
 
+        # optimizer  ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ----------
         Opt = get_model(conf.optimizer.name)
         if conf.duplicate_optimizer_per_scale:
             oconfs = [deepcopy(conf.optimizer) for _ in self.extractor.scales]
             feature_dim = self.extractor.conf.output_dim
+            
             if not isinstance(feature_dim, int):
                 for d, oconf in zip(feature_dim, oconfs):
                     with omegaconf.read_write(oconf):
                         with omegaconf.open_dict(oconf):
                             oconf.feature_dim = d
+                            
             self.optimizer = torch.nn.ModuleList([Opt(c) for c in oconfs])
+            
         else:
             self.optimizer = Opt(conf.optimizer)
 
         if conf.init_target_offset is not None:
-            raise ValueError('This entry has been deprecated. Please instead '
-                             'use the `init_pose` config of the dataloader.')
+            raise ValueError('This entry has been deprecated. Please instead use the `init_pose` config of the dataloader.')
 
     def _forward(self, data):
+        
         def process_siamese(data_i):
             pred_i = self.extractor(data_i)
-            pred_i['camera_pyr'] = [data_i['camera'].scale(1/s)
-                                    for s in self.extractor.scales]
+            pred_i['camera_pyr'] = [data_i['camera'].scale(1/s) for s in self.extractor.scales]
             return pred_i
 
+        
         pred = {i: process_siamese(data[i]) for i in ['ref', 'query']}
         p3D_ref = data['ref']['points3D']
         T_init = data['T_r2q_init']
@@ -79,6 +91,7 @@ class TwoViewRefiner(BaseModel):
             F_q = pred['query']['feature_maps'][i]
             cam_ref = pred['ref']['camera_pyr'][i]
             cam_q = pred['query']['camera_pyr'][i]
+            
             if self.conf.duplicate_optimizer_per_scale:
                 opt = self.optimizer[i]
             else:
@@ -99,9 +112,17 @@ class TwoViewRefiner(BaseModel):
                 F_ref = nnF.normalize(F_ref, dim=2)  # B x N x C
                 F_q = nnF.normalize(F_q, dim=1)  # B x C x W x H
 
-            T_opt, failed = opt(dict(
-                p3D=p3D_ref, F_ref=F_ref, F_q=F_q, T_init=T_init, cam_q=cam_q,
-                mask=mask, W_ref_q=W_ref_q))
+            T_opt, failed = opt(
+                                dict(
+                                    p3D=p3D_ref, 
+                                    F_ref=F_ref, 
+                                    F_q=F_q, 
+                                    T_init=T_init, 
+                                    cam_q=cam_q,
+                                    mask=mask, 
+                                    W_ref_q=W_ref_q
+                                    )
+                                )
 
             pred['T_r2q_init'].append(T_init)
             pred['T_r2q_opt'].append(T_opt)
@@ -117,15 +138,22 @@ class TwoViewRefiner(BaseModel):
 
         p2D_q_gt, mask = project(data['T_r2q_gt'])
         p2D_q_i, mask_i = project(data['T_r2q_init'])
+        
         mask = (mask & mask_i).float()
 
         too_few = torch.sum(mask, -1) < 10
+        
         if torch.any(too_few):
             logger.warning(
-                'Few points in batch '+str([
-                    (data['scene'][i], data['ref']['index'][i].item(),
-                     data['query']['index'][i].item())
-                    for i in torch.where(too_few)[0]]))
+                            'Few points in batch '+str([
+                                                            (
+                                                             data['scene'][i], 
+                                                             data['ref']['index'][i].item(),
+                                                             data['query']['index'][i].item()
+                                                            )
+                                                            for i in torch.where(too_few)[0]
+                                                        ])
+                          )
 
         def reprojection_error(T_r2q):
             p2D_q, _ = project(T_r2q)
@@ -137,15 +165,19 @@ class TwoViewRefiner(BaseModel):
         num_scales = len(self.extractor.scales)
         success = None
         losses = {'total': 0.}
+        
         for i, T_opt in enumerate(pred['T_r2q_opt']):
             err = reprojection_error(T_opt).clamp(max=self.conf.clamp_error)
             loss = err / num_scales
+            
             if i > 0:
                 loss = loss * success.float()
+                
             thresh = self.conf.success_thresh * self.extractor.scales[-1-i]
             success = err < thresh
             losses[f'reprojection_error/{i}'] = err
             losses['total'] += loss
+            
         losses['reprojection_error'] = err
         losses['total'] *= (~too_few).float()
 
@@ -157,17 +189,22 @@ class TwoViewRefiner(BaseModel):
     def metrics(self, pred, data):
         T_q2r_gt = data['ref']['T_w2cam'] @ data['query']['T_w2cam'].inv()
 
+        
         @torch.no_grad()
         def scaled_pose_error(T_r2q):
             err_R, err_t = (T_r2q @ T_q2r_gt).magnitude()
+            
             if self.conf.normalize_dt:
                 err_t /= torch.norm(T_q2r_gt.t, dim=-1)
+                
             return err_R, err_t
+        
 
         metrics = {}
         for i, T_opt in enumerate(pred['T_r2q_opt']):
             err = scaled_pose_error(T_opt)
             metrics[f'R_error/{i}'], metrics[f't_error/{i}'] = err
+            
         metrics['R_error'], metrics['t_error'] = err
 
         err_init = scaled_pose_error(pred['T_r2q_init'][0])

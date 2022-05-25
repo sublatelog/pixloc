@@ -382,7 +382,9 @@ if __name__ == '__main__':
     if args.distributed:
         args.n_gpus = torch.cuda.device_count()
         torch.multiprocessing.spawn(
-            main_worker, nprocs=args.n_gpus,
-            args=(conf, output_dir, args))
+                                    main_worker, 
+                                    nprocs=args.n_gpus,
+                                    args=(conf, output_dir, args)
+                                    )
     else:
         main_worker(0, conf, output_dir, args)

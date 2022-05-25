@@ -21,8 +21,7 @@ from .models import get_model
 from .utils.stdout_capturing import capture_outputs
 from .utils.tools import AverageMetric, MedianMetric, set_seed, fork_rng
 from .utils.tensor import batch_to_device
-from .utils.experiments import (
-    delete_old_checkpoints, get_last_checkpoint, get_best_checkpoint)
+from .utils.experiments import (delete_old_checkpoints, get_last_checkpoint, get_best_checkpoint)
 from ..settings import TRAINING_PATH
 from .. import logger
 
@@ -45,12 +44,14 @@ default_train_conf = {
     'dataset_callback_fn': None,  # data func called at the start of each epoch
     'clip_grad': None,
 }
+
 default_train_conf = OmegaConf.create(default_train_conf)
 
 
 # evaluate ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ----------
 def do_evaluation(model, loader, device, loss_fn, metrics_fn, conf, pbar=True):
     model.eval()
+    
     results = {}
     for data in tqdm(loader, desc='Evaluation', ascii=True, disable=not pbar):
         data = batch_to_device(data, device, non_blocking=True)

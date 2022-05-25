@@ -74,10 +74,15 @@ class UNet(BaseModel):
     def build_encoder(self, conf):
         assert isinstance(conf.encoder, str) # vgg16
         
+        # Encoder
         Encoder = getattr(torchvision.models, conf.encoder) # vgg16
         encoder = Encoder(pretrained=True)
+        
+        # checkpoint
         Block = checkpointed(torch.nn.Sequential, do=conf.checkpointed) # checkpointed: true
 
+        
+        # vgg ----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- -----------
         if conf.encoder.startswith('vgg'):
             # Parse the layers and pack them into downsampling blocks
             # It's easy for VGG-style nets because of their linear structure.
@@ -91,19 +96,28 @@ class UNet(BaseModel):
             
             for i, layer in enumerate(encoder.features):
                 
+                # layer
                 if isinstance(layer, torch.nn.Conv2d):
                     previous_dim = layer.out_channels
                     
+                # MaxPool2d > layer
                 elif isinstance(layer, torch.nn.MaxPool2d):
+                    
                     assert previous_dim is not None
+                    
                     skip_dims.append(previous_dim)
                     
+                    # num_downsample:4
                     if (conf.num_downsample + 1) == len(blocks):
                         break
                         
                     blocks.append([])
+                    
+                    # 'do_average_pooling': False
                     if conf.do_average_pooling:
+                        
                         assert layer.dilation == 1
+                        
                         layer = torch.nn.AvgPool2d(
                                                     kernel_size=layer.kernel_size, 
                                                     stride=layer.stride,
@@ -111,13 +125,14 @@ class UNet(BaseModel):
                                                     ceil_mode=layer.ceil_mode,
                                                     count_include_pad=False
                                                   )
-                        
+                # add layer        
                 blocks[-1].append(layer)
                 
             assert (conf.num_downsample + 1) == len(blocks)
             
             encoder = [Block(*b) for b in blocks]
-            
+        
+        # resnet ----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- -----------
         elif conf.encoder.startswith('resnet'):
             # Manually define the splits - this could be improved
             assert conf.encoder[len('resnet'):] in ['18', '34', '50', '101']
@@ -187,6 +202,16 @@ class UNet(BaseModel):
         if conf.compute_uncertainty:
             self.uncertainty = nn.ModuleList(uncertainty)
 
+            
+            
+            
+    """
+    features = block(features)
+    skip_features.append(features)
+    
+    
+    
+    """
     def _forward(self, data):
         image = data['image']
         mean, std = image.new_tensor(self.mean), image.new_tensor(self.std)

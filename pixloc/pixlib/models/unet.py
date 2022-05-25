@@ -16,31 +16,36 @@ class DecoderBlock(nn.Module):
     def __init__(self, previous, skip, out, num_convs=1, norm=nn.BatchNorm2d):
         super().__init__()
 
-        self.upsample = nn.Upsample(
-                scale_factor=2, mode='bilinear', align_corners=False)
+        self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
 
         layers = []
         for i in range(num_convs):
-            conv = nn.Conv2d(
-                previous+skip if i == 0 else out, out,
-                kernel_size=3, padding=1, bias=norm is None)
+            conv = nn.Conv2d(previous+skip if i == 0 else out, out, kernel_size=3, padding=1, bias=norm is None)
             layers.append(conv)
+            
             if norm is not None:
                 layers.append(norm(out))
+                
             layers.append(nn.ReLU(inplace=True))
+            
         self.layers = nn.Sequential(*layers)
 
     def forward(self, previous, skip):
         upsampled = self.upsample(previous)
+        
         # If the shape of the input map `skip` is not a multiple of 2,
         # it will not match the shape of the upsampled map `upsampled`.
         # If the downsampling uses ceil_mode=False, we nedd to crop `skip`.
         # If it uses ceil_mode=True (not supported here), we should pad it.
+        
         _, _, hu, wu = upsampled.shape
         _, _, hs, ws = skip.shape
-        assert (hu <= hs) and (wu <= ws), 'Using ceil_mode=True in pooling?'
+        
+        assert (hu <= hs) and (wu <= ws), 'Using ceil_mode=True in pooling?'        
         # assert (hu == hs) and (wu == ws), 'Careful about padding'
+        
         skip = skip[:, :, :hu, :wu]
+        
         return self.layers(torch.cat([upsampled, skip], dim=1))
 
 
@@ -62,6 +67,7 @@ class UNet(BaseModel):
         'compute_uncertainty': False,
         'checkpointed': False,  # whether to use gradient checkpointing
     }
+    
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
 
@@ -75,39 +81,58 @@ class UNet(BaseModel):
             # Parse the layers and pack them into downsampling blocks
             # It's easy for VGG-style nets because of their linear structure.
             # This does not handle strided convs and residual connections
+            
             assert max(conf.output_scales) <= conf.num_downsample
+            
             skip_dims = []
             previous_dim = None
             blocks = [[]]
+            
             for i, layer in enumerate(encoder.features):
+                
                 if isinstance(layer, torch.nn.Conv2d):
                     previous_dim = layer.out_channels
+                    
                 elif isinstance(layer, torch.nn.MaxPool2d):
                     assert previous_dim is not None
                     skip_dims.append(previous_dim)
+                    
                     if (conf.num_downsample + 1) == len(blocks):
                         break
+                        
                     blocks.append([])
                     if conf.do_average_pooling:
                         assert layer.dilation == 1
                         layer = torch.nn.AvgPool2d(
-                            kernel_size=layer.kernel_size, stride=layer.stride,
-                            padding=layer.padding, ceil_mode=layer.ceil_mode,
-                            count_include_pad=False)
+                                                    kernel_size=layer.kernel_size, 
+                                                    stride=layer.stride,
+                                                    padding=layer.padding, 
+                                                    ceil_mode=layer.ceil_mode,
+                                                    count_include_pad=False
+                                                  )
+                        
                 blocks[-1].append(layer)
+                
             assert (conf.num_downsample + 1) == len(blocks)
+            
             encoder = [Block(*b) for b in blocks]
+            
         elif conf.encoder.startswith('resnet'):
             # Manually define the splits - this could be improved
             assert conf.encoder[len('resnet'):] in ['18', '34', '50', '101']
-            block1 = torch.nn.Sequential(encoder.conv1, encoder.bn1,
-                                         encoder.relu)
+            
+            block1 = torch.nn.Sequential(encoder.conv1, 
+                                         encoder.bn1,
+                                         encoder.relu
+                                        )
+            
             block2 = torch.nn.Sequential(encoder.maxpool, encoder.layer1)
             block3 = encoder.layer2
             block4 = encoder.layer3
             blocks = [block1, block2, block3, block4]
             encoder = [torch.nn.Identity()] + [Block(b) for b in blocks]
             skip_dims = [3, 64, 256, 512, 1024]
+            
         else:
             raise NotImplementedError(conf.encoder)
 
@@ -129,13 +154,16 @@ class UNet(BaseModel):
             for out, skip in zip(conf.decoder, skip_dims[:-1][::-1]):
                 decoder.append(Block(previous, skip, out, norm=norm))
                 previous = out
+                
             self.decoder = nn.ModuleList(decoder)
 
         # Adaptation layers
         adaptation = []
         if conf.compute_uncertainty:
             uncertainty = []
+            
         for idx, i in enumerate(conf.output_scales):
+            
             if conf.decoder is None or i == (len(self.encoder) - 1):
                 input_ = skip_dims[i]
             else:
@@ -150,6 +178,7 @@ class UNet(BaseModel):
             adaptation.append(block)
             if conf.compute_uncertainty:
                 uncertainty.append(AdaptationBlock(input_, 1))
+                
         self.adaptation = nn.ModuleList(adaptation)
         self.scales = [2**s for s in conf.output_scales]
         if conf.compute_uncertainty:
@@ -168,8 +197,10 @@ class UNet(BaseModel):
 
         if self.conf.decoder:
             pre_features = [skip_features[-1]]
+            
             for block, skip in zip(self.decoder, skip_features[:-1][::-1]):
                 pre_features.append(block(pre_features[-1], skip))
+                
             pre_features = pre_features[::-1]  # fine to coarse
         else:
             pre_features = skip_features
@@ -177,6 +208,7 @@ class UNet(BaseModel):
         out_features = []
         for adapt, i in zip(self.adaptation, self.conf.output_scales):
             out_features.append(adapt(pre_features[i]))
+            
         pred = {'feature_maps': out_features}
 
         if self.conf.compute_uncertainty:
@@ -185,6 +217,7 @@ class UNet(BaseModel):
                 unc = layer(pre_features[i])
                 conf = torch.sigmoid(-unc)
                 confidences.append(conf)
+                
             pred['confidences'] = confidences
 
         return pred

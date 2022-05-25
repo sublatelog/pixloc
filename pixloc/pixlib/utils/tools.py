@@ -43,24 +43,34 @@ class MedianMetric:
         else:
             return np.nanmedian(self._elements)
 
-
+# mod_name:two_view_refiner
+# base_path:models       
+# BaseClass:BaseModel
 def get_class(mod_name, base_path, BaseClass):
-    """Get the class object which inherits from BaseClass and is defined in
-       the module named mod_name, child of base_path.
     """
-    mod_path = '{}.{}'.format(base_path, mod_name)
+    Get the class object which inherits from BaseClass and is defined in
+    the module named mod_name, child of base_path.
+    """
+    
+    mod_path = '{}.{}'.format(base_path, mod_name) # models.two_view_refiner
     mod = __import__(mod_path, fromlist=[''])
+    
     classes = inspect.getmembers(mod, inspect.isclass)
+    
     # Filter classes defined in the module
     classes = [c for c in classes if c[1].__module__ == mod_path]
+    
     # Filter classes inherited from BaseModel
     classes = [c for c in classes if issubclass(c[1], BaseClass)]
+    
     assert len(classes) == 1, classes
+    
     return classes[0][1]
 
 
 class Timer(object):
-    """A simpler timer context object.
+    """
+    A simpler timer context object.
     Usage:
     ```
     > with Timer('mytimer'):
@@ -109,10 +119,12 @@ def get_random_state():
     pth_state = torch.get_rng_state()
     np_state = np.random.get_state()
     py_state = random.getstate()
+    
     if torch.cuda.is_available():
         cuda_state = torch.cuda.get_rng_state_all()
     else:
         cuda_state = None
+        
     return pth_state, np_state, py_state, cuda_state
 
 
@@ -121,9 +133,8 @@ def set_random_state(state):
     torch.set_rng_state(pth_state)
     np.random.set_state(np_state)
     random.setstate(py_state)
-    if (cuda_state is not None
-            and torch.cuda.is_available()
-            and len(cuda_state) == torch.cuda.device_count()):
+    
+    if (cuda_state is not None and torch.cuda.is_available() and len(cuda_state) == torch.cuda.device_count()):
         torch.cuda.set_rng_state_all(cuda_state)
 
 
@@ -132,6 +143,7 @@ def fork_rng(seed=None):
     state = get_random_state()
     if seed is not None:
         set_seed(seed)
+        
     try:
         yield
     finally:

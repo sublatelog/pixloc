@@ -64,8 +64,8 @@ class DirectAbsoluteCost:
                 T_w2q: Pose, 
                 camera: Camera,
                 p3D_q: Tensor, 
-                F_p2D_raw: Tensor, J
-                _f_p2D: Tensor
+                F_p2D_raw: Tensor, 
+                J_f_p2D: Tensor
                 ):
 
         J_p3D_T = T_w2q.J_transform(p3D_q)

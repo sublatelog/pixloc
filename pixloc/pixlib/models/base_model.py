@@ -15,9 +15,12 @@ class MetaModel(ABCMeta):
         for base in bases:
             for key in ('base_default_conf', 'default_conf'):
                 update = getattr(base, key, {})
+                
                 if isinstance(update, dict):
                     update = OmegaConf.create(update)
+                    
                 total_conf = OmegaConf.merge(total_conf, update)
+                
         return dict(base_default_conf=total_conf)
 
 
@@ -60,8 +63,8 @@ class BaseModel(nn.Module, metaclass=MetaModel):
     def __init__(self, conf):
         """Perform some logic and call the _init method of the child model."""
         super().__init__()
-        default_conf = OmegaConf.merge(
-                self.base_default_conf, OmegaConf.create(self.default_conf))
+        default_conf = OmegaConf.merge(self.base_default_conf, OmegaConf.create(self.default_conf))
+        
         if self.strict_conf:
             OmegaConf.set_struct(default_conf, True)
 
@@ -73,9 +76,11 @@ class BaseModel(nn.Module, metaclass=MetaModel):
 
         if isinstance(conf, dict):
             conf = OmegaConf.create(conf)
+            
         self.conf = conf = OmegaConf.merge(default_conf, conf)
         OmegaConf.set_readonly(conf, True)
         OmegaConf.set_struct(conf, True)
+        
         self.required_data_keys = copy(self.required_data_keys)
         self._init(conf)
 
@@ -89,6 +94,7 @@ class BaseModel(nn.Module, metaclass=MetaModel):
         def freeze_bn(module):
             if isinstance(module, nn.modules.batchnorm._BatchNorm):
                 module.eval()
+                
         if self.conf.freeze_batch_normalization:
             self.apply(freeze_bn)
 
@@ -96,9 +102,11 @@ class BaseModel(nn.Module, metaclass=MetaModel):
 
     def forward(self, data):
         """Check the data and call the _forward method of the child model."""
+        
         def recursive_key_check(expected, given):
             for key in expected:
                 assert key in given, f'Missing key {key} in data'
+                
                 if isinstance(expected, dict):
                     recursive_key_check(expected[key], given[key])
 
@@ -108,11 +116,13 @@ class BaseModel(nn.Module, metaclass=MetaModel):
     @abstractmethod
     def _init(self, conf):
         """To be implemented by the child class."""
+        
         raise NotImplementedError
 
     @abstractmethod
     def _forward(self, data):
         """To be implemented by the child class."""
+        
         raise NotImplementedError
 
     @abstractmethod

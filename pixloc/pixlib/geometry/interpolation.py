@@ -5,7 +5,11 @@ from typing import Tuple
 
 
 @torch.jit.script
-def interpolate_tensor_bicubic(tensor, pts, return_gradients: bool = False):
+def interpolate_tensor_bicubic(tensor, 
+                               pts, 
+                               return_gradients: bool = False
+                              ):
+    
     # According to R. Keys "Cubic convolution interpolation for digital image processing".
     # references:
     # https://github.com/ceres-solver/ceres-solver/blob/master/include/ceres/cubic_interpolation.h
@@ -23,10 +27,12 @@ def interpolate_tensor_bicubic(tensor, pts, return_gradients: bool = False):
 
     pts_0 = torch.floor(pts)
     res = pts - pts_0
+    
     x, y = pts_0[:, 0], pts_0[:, 1]
 
     c, h, w = tensor.shape
     f_patches = torch.zeros((c, len(pts), 4, 4)).to(tensor)
+    
     # TODO: could we do this faster with gather or grid_sampler nearest?
     for i in [-1, 0, 1, 2]:
         for j in [-1, 0, 1, 2]:
@@ -34,15 +40,29 @@ def interpolate_tensor_bicubic(tensor, pts, return_gradients: bool = False):
             y_ = (y+i).long().clamp(min=0, max=h-1).long()
             f_patches[:, :, i+1, j+1] = tensor[:, y_, x_]
 
-    t = torch.stack([res**3, res**2, res, torch.ones_like(res)], -1)
+    t = torch.stack([
+                    res**3, 
+                    res**2, 
+                    res, 
+                    torch.ones_like(res)
+                    ], -1)
+    
     coeffs = torch.einsum('mk,nck->cnm', spline_base, t)
+    
     coeffs_x, coeffs_y = coeffs[0], coeffs[1]
+    
     interp = torch.einsum('ni,nj,cnij->nc', coeffs_y, coeffs_x, f_patches)
 
     if return_gradients:
         dt_xy = torch.stack([
-            3*res**2, 2*res, torch.ones_like(res), torch.zeros_like(res)], -1)
+                            3*res**2, 
+                            2*res, 
+                            torch.ones_like(res), 
+                            torch.zeros_like(res)
+                            ], -1)
+        
         B_dt_xy = torch.einsum('mk,nck->cnm', spline_base, dt_xy)
+        
         B_dt_x, B_dt_y = B_dt_xy[0], B_dt_xy[1]
 
         J_out_x = torch.einsum('ni,nj,cnij->nc', coeffs_y, B_dt_x, f_patches)
@@ -55,11 +75,17 @@ def interpolate_tensor_bicubic(tensor, pts, return_gradients: bool = False):
 
 
 @torch.jit.script
-def interpolate_tensor_bilinear(tensor, pts, return_gradients: bool = False):
+def interpolate_tensor_bilinear(
+                                tensor, 
+                                pts, 
+                                return_gradients: bool = False
+                                ):
+    
     if tensor.dim() == 3:
         assert pts.dim() == 2
         batched = False
         tensor, pts = tensor[None], pts[None]
+        
     else:
         batched = True
 
@@ -67,43 +93,71 @@ def interpolate_tensor_bilinear(tensor, pts, return_gradients: bool = False):
     scale = torch.tensor([w-1, h-1]).to(pts)
     pts = (pts / scale) * 2 - 1
     pts = pts.clamp(min=-2, max=2)  # ideally use the mask instead
+    
     interpolated = torch.nn.functional.grid_sample(
-            tensor, pts[:, None], mode='bilinear', align_corners=True)
+                                                    tensor, 
+                                                    pts[:, None], 
+                                                    mode='bilinear', 
+                                                    align_corners=True
+                                                  )
+    
     interpolated = interpolated.reshape(b, c, -1).transpose(-1, -2)
 
     if return_gradients:
         dxdy = torch.tensor([[1, 0], [0, 1]])[:, None].to(pts) / scale * 2
         dx, dy = dxdy.chunk(2, dim=0)
         pts_d = torch.cat([pts-dx, pts+dx, pts-dy, pts+dy], 1)
+        
         tensor_d = torch.nn.functional.grid_sample(
-                tensor, pts_d[:, None], mode='bilinear', align_corners=True)
+                                                    tensor, 
+                                                    pts_d[:, None], 
+                                                    mode='bilinear', 
+                                                    align_corners=True
+                                                  )
+        
         tensor_d = tensor_d.reshape(b, c, -1).transpose(-1, -2)
         tensor_x0, tensor_x1, tensor_y0, tensor_y1 = tensor_d.chunk(4, dim=1)
+        
         gradients = torch.stack([
-            (tensor_x1 - tensor_x0)/2, (tensor_y1 - tensor_y0)/2], dim=-1)
+                                (tensor_x1 - tensor_x0)/2, 
+                                (tensor_y1 - tensor_y0)/2
+                                ], dim=-1)
+        
     else:
         gradients = torch.zeros(b, pts.shape[1], c, 2).to(tensor)
 
     if not batched:
         interpolated, gradients = interpolated[0], gradients[0]
+        
     return interpolated, gradients
 
 
-def mask_in_image(pts, image_size: Tuple[int, int], pad: int = 1):
+def mask_in_image(pts, 
+                  image_size: Tuple[int, int], 
+                  pad: int = 1
+                 ):
+    
     w, h = image_size
     image_size_ = torch.tensor([w-pad-1, h-pad-1]).to(pts)
+    
     return torch.all((pts >= pad) & (pts <= image_size_), -1)
 
 
 @torch.jit.script
-def interpolate_tensor(tensor, pts, mode: str = 'linear',
-                       pad: int = 1, return_gradients: bool = False):
-    '''Interpolate a 3D tensor at given 2D locations.
+def interpolate_tensor(tensor, 
+                       pts, 
+                       mode: str = 'linear',
+                       pad: int = 1, 
+                       return_gradients: bool = False
+                      ):
+    
+    '''
+    Interpolate a 3D tensor at given 2D locations.
     Args:
         tensor: with shape (C, H, W) or (B, C, H, W).
         pts: points with shape (N, 2) or (B, N, 2)
         mode: interpolation mode, `'linear'` or `'cubic'`
-        pad: padding for the returned mask of valid keypoints
+        pad: padding for the returned mask of valid keypoints        
         return_gradients: whether to return the first derivative
             of the interpolated values (currentl only in cubic mode).
     Returns:
@@ -111,22 +165,34 @@ def interpolate_tensor(tensor, pts, mode: str = 'linear',
         mask: boolean mask, true if pts are in [pad, W-1-pad] x [pad, H-1-pad]
         gradients: (N, C, 2) or (B, N, C, 2), 0-filled if not return_gradients
     '''
+    
     h, w = tensor.shape[-2:]
     if mode == 'cubic':
         pad += 1  # bicubic needs one more pixel on each side
+        
     mask = mask_in_image(pts, (w, h), pad=pad)
+    
     # Ideally we want to use mask to clamp outlier pts before interpolationm
     # but this line throws some obscure errors about inplace ops.
     # pts = pts.masked_fill(mask.unsqueeze(-1), 0.)
 
     if mode == 'cubic':
         interpolated, gradients = interpolate_tensor_bicubic(
-                tensor, pts, return_gradients)
+                                                            tensor, 
+                                                            pts, 
+                                                            return_gradients
+                                                            )
+        
     elif mode == 'linear':
         interpolated, gradients = interpolate_tensor_bilinear(
-                tensor, pts, return_gradients)
+                                                            tensor, 
+                                                            pts, 
+                                                            return_gradients
+                                                            )
+        
     else:
         raise NotImplementedError(mode)
+        
     return interpolated, mask, gradients
 
 
@@ -135,10 +201,19 @@ class Interpolator:
         self.mode = mode
         self.pad = pad
 
-    def __call__(self, tensor: torch.Tensor, pts: torch.Tensor,
-                 return_gradients: bool = False):
+    def __call__(self, 
+                 tensor: torch.Tensor, 
+                 pts: torch.Tensor,
+                 return_gradients: bool = False
+                ):
+        
         return interpolate_tensor(
-            tensor, pts, self.mode, self.pad, return_gradients)
+                                tensor, 
+                                pts, 
+                                self.mode, 
+                                self.pad, 
+                                return_gradients
+                                )
 
 
 def test_interpolate_cubic_opencv(f, pts):
@@ -153,6 +228,7 @@ def test_interpolate_cubic_opencv(f, pts):
         interp_cv2_cubic.append(interp_i)
         interp_i = cv2.remap(f_i, pts_[None], None, cv2.INTER_LINEAR)[0]
         interp_cv2_linear.append(interp_i)
+        
     interp_cv2_cubic = np.stack(interp_cv2_cubic, -1)
     interp_cv2_linear = np.stack(interp_cv2_linear, -1)
 
@@ -180,16 +256,20 @@ def test_interpolate_cubic_gradients(tensor, pts):
     tensor, pts = tensor.double(), pts.double()
 
     _, J_analytical = interpolate_tensor_bicubic(
-            tensor, pts, return_gradients=True)
+                                                tensor, 
+                                                pts, 
+                                                return_gradients=True
+                                                )
 
     J = compute_J(
-        lambda xy: interpolate_tensor_bicubic(tensor, xy.reshape(-1, 2))[0],
-        pts.reshape(-1))
+                    lambda xy: interpolate_tensor_bicubic(tensor, xy.reshape(-1, 2))[0],
+                    pts.reshape(-1)
+                 )
+    
     J = J.reshape(J.shape[:2]+(-1, 2))
     J = J[range(len(pts)), :, range(len(pts)), :]
 
-    print('Gradients consistent with autograd:',
-          torch.allclose(J_analytical, J))
+    print('Gradients consistent with autograd:', torch.allclose(J_analytical, J))
 
 
 def test_run_all(seed=0):

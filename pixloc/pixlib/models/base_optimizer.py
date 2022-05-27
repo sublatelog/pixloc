@@ -28,9 +28,9 @@ class BaseOptimizer(BaseModel):
         normalize_features=False,
         lambda_=0,  # Gauss-Newton
         interpolation=dict(
-            mode='linear',
-            pad=4,
-        ),
+                            mode='linear',
+                            pad=4,
+                          ),
         grad_stop_criteria=1e-4,
         dt_stop_criteria=5e-3,  # in meters
         dR_stop_criteria=5e-2,  # in degrees
@@ -46,9 +46,10 @@ class BaseOptimizer(BaseModel):
     def _init(self, conf):
         self.loss_fn = eval('losses.' + conf.loss_fn)
         self.interpolator = Interpolator(**conf.interpolation)
-        self.cost_fn = DirectAbsoluteCost(self.interpolator,
-                                          normalize=conf.normalize_features)
+        self.cost_fn = DirectAbsoluteCost(self.interpolator, normalize=conf.normalize_features)
+        
         assert conf.lambda_ >= 0.
+        
         # deprecated entries
         assert not conf.sqrt_diag_damping
         assert conf.bound_confidence
@@ -63,13 +64,21 @@ class BaseOptimizer(BaseModel):
         stop = False
         if not self.training and (args['i'] % 10) == 0:
             T_delta, grad = args['T_delta'], args['grad']
+            
             grad_norm = torch.norm(grad.detach(), dim=-1)
+            
             small_grad = grad_norm < self.conf.grad_stop_criteria
             dR, dt = T_delta.magnitude()
-            small_step = ((dt < self.conf.dt_stop_criteria)
-                          & (dR < self.conf.dR_stop_criteria))
+            
+            small_step = (
+                          (dt < self.conf.dt_stop_criteria)
+                          & 
+                          (dR < self.conf.dR_stop_criteria)
+                         )
+            
             if torch.all(small_step | small_grad):
                 stop = True
+                
         return stop
 
     def J_scaling(self, J: Tensor, J_scaling: Tensor, valid: Tensor):
@@ -77,7 +86,9 @@ class BaseOptimizer(BaseModel):
             J_norm = torch.norm(J.detach(), p=2, dim=(-2))
             J_norm = masked_mean(J_norm, valid[..., None], -2)
             J_scaling = 1 / (1 + J_norm)
+            
         J = J * J_scaling[..., None, None, :]
+        
         return J, J_scaling
 
     def build_system(self, J: Tensor, res: Tensor, weights: Tensor):
@@ -93,42 +104,66 @@ class BaseOptimizer(BaseModel):
 
     def _forward(self, data: Dict):
         return self._run(
-            data['p3D'], data['F_ref'], data['F_q'], data['T_init'],
-            data['cam_q'], data['mask'], data.get('W_ref_q'))
+                        data['p3D'], 
+                        data['F_ref'], 
+                        data['F_q'], 
+                        data['T_init'],
+                        data['cam_q'], 
+                        data['mask'], 
+                        data.get('W_ref_q')
+                        )
 
     @torchify
     def run(self, *args, **kwargs):
         return self._run(*args, **kwargs)
 
-    def _run(self, p3D: Tensor, F_ref: Tensor, F_query: Tensor,
-             T_init: Pose, camera: Camera, mask: Optional[Tensor] = None,
-             W_ref_query: Optional[Tuple[Tensor, Tensor]] = None):
+    def _run(self, 
+             p3D: Tensor, 
+             F_ref: Tensor, 
+             F_query: Tensor,
+             T_init: Pose, 
+             camera: Camera, 
+             mask: Optional[Tensor] = None,
+             W_ref_query: Optional[Tuple[Tensor, Tensor]] = None
+            ):
 
         T = T_init
         J_scaling = None
+        
         if self.conf.normalize_features:
             F_ref = torch.nn.functional.normalize(F_ref, dim=-1)
+            
         args = (camera, p3D, F_ref, F_query, W_ref_query)
-        failed = torch.full(T.shape, False, dtype=torch.bool, device=T.device)
+        
+        failed = torch.full(T.shape, 
+                            False, 
+                            dtype=torch.bool, 
+                            device=T.device
+                           )
 
         for i in range(self.conf.num_iters):
             res, valid, w_unc, _, J = self.cost_fn.residual_jacobian(T, *args)
+            
             if mask is not None:
                 valid &= mask
+                
             failed = failed | (valid.long().sum(-1) < 10)  # too few points
 
             # compute the cost and aggregate the weights
             cost = (res**2).sum(-1)
             cost, w_loss, _ = self.loss_fn(cost)
             weights = w_loss * valid.float()
+            
             if w_unc is not None:
                 weights *= w_unc
+                
             if self.conf.jacobi_scaling:
                 J, J_scaling = self.J_scaling(J, J_scaling, valid)
 
             # solve the linear system
             g, H = self.build_system(J, res, weights)
             delta = optimizer_step(g, H, self.conf.lambda_, mask=~failed)
+            
             if self.conf.jacobi_scaling:
                 delta = delta * J_scaling
 
@@ -137,8 +172,18 @@ class BaseOptimizer(BaseModel):
             T_delta = Pose.from_aa(dw, dt)
             T = T_delta @ T
 
-            self.log(i=i, T_init=T_init, T=T, T_delta=T_delta, cost=cost,
-                     valid=valid, w_unc=w_unc, w_loss=w_loss, H=H, J=J)
+            self.log(i=i, 
+                     T_init=T_init, 
+                     T=T, 
+                     T_delta=T_delta, 
+                     cost=cost,
+                     valid=valid, 
+                     w_unc=w_unc, 
+                     w_loss=w_loss, 
+                     H=H, 
+                     J=J
+                    )
+            
             if self.early_stop(i=i, T_delta=T_delta, grad=g, cost=cost):
                 break
 

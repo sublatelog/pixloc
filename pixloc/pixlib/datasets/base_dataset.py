@@ -63,7 +63,7 @@ def collate(batch):
             
         return torch.stack(batch, 0, out=out)
       
-    elif elem_type.__module__ == 'numpy' 
+    elif elem_type.__module__ == 'numpy' \ 
             and elem_type.__name__ != 'str_' \
             and elem_type.__name__ != 'string_':
         

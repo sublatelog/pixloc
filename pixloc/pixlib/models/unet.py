@@ -78,7 +78,7 @@ class UNet(BaseModel):
         Encoder = getattr(torchvision.models, conf.encoder) # vgg16
         encoder = Encoder(pretrained=True)
         
-        # checkpoint
+        # gradient checkpointing
         Block = checkpointed(torch.nn.Sequential, do=conf.checkpointed) # checkpointed: true
 
         
@@ -146,6 +146,8 @@ class UNet(BaseModel):
             block3 = encoder.layer2
             block4 = encoder.layer3
             blocks = [block1, block2, block3, block4]
+            
+            # torch.nn.Identity():恒等関数（Identity function）とは、あらゆる入力値を、全く同じ数値に変換して（＝そのまま）出力する関数である。
             encoder = [torch.nn.Identity()] + [Block(b) for b in blocks]
             skip_dims = [3, 64, 256, 512, 1024]
             

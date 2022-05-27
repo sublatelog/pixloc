@@ -36,10 +36,12 @@ class TwoViewRefiner(BaseModel):
     }
     
     
+    
     required_data_keys = {
         'ref': ['image', 'camera', 'T_w2cam'],
         'query': ['image', 'camera', 'T_w2cam'],
     }
+    
     
     
     strict_conf = False  # need to pass new confs to children models
@@ -70,6 +72,7 @@ class TwoViewRefiner(BaseModel):
             
         else:
             self.optimizer = Opt(conf.optimizer)
+            
 
         if conf.init_target_offset is not None:
             raise ValueError('This entry has been deprecated. Please instead use the `init_pose` config of the dataloader.')
@@ -132,7 +135,8 @@ class TwoViewRefiner(BaseModel):
             T_init = T_opt.detach()
 
         return pred
-
+    
+    
     def loss(self, pred, data):
         cam_q = data['query']['camera']
 
@@ -140,7 +144,7 @@ class TwoViewRefiner(BaseModel):
             return cam_q.world2image(T_r2q * data['ref']['points3D'])
 
         p2D_q_gt, mask = project(data['T_r2q_gt'])
-        p2D_q_i, mask_i = project(data['T_r2q_init'])
+        p2D_q_i, mask_i = project(data['T_r2q_init'])        
         
         mask = (mask & mask_i).float()
 
@@ -163,7 +167,7 @@ class TwoViewRefiner(BaseModel):
             err = torch.sum((p2D_q_gt - p2D_q)**2, dim=-1)
             err = scaled_barron(1., 2.)(err)[0]/4
             err = masked_mean(err, mask, -1)
-            return err
+            return err        
 
         num_scales = len(self.extractor.scales)
         success = None
@@ -179,7 +183,7 @@ class TwoViewRefiner(BaseModel):
             thresh = self.conf.success_thresh * self.extractor.scales[-1-i]
             success = err < thresh
             losses[f'reprojection_error/{i}'] = err
-            losses['total'] += loss
+            losses['total'] += loss            
             
         losses['reprojection_error'] = err
         losses['total'] *= (~too_few).float()
@@ -190,8 +194,7 @@ class TwoViewRefiner(BaseModel):
         return losses
 
     def metrics(self, pred, data):
-        T_q2r_gt = data['ref']['T_w2cam'] @ data['query']['T_w2cam'].inv()
-
+        T_q2r_gt = data['ref']['T_w2cam'] @ data['query']['T_w2cam'].inv()        
         
         @torch.no_grad()
         def scaled_pose_error(T_r2q):
@@ -200,13 +203,13 @@ class TwoViewRefiner(BaseModel):
             if self.conf.normalize_dt:
                 err_t /= torch.norm(T_q2r_gt.t, dim=-1)
                 
-            return err_R, err_t
+            return err_R, err_t        
         
 
         metrics = {}
         for i, T_opt in enumerate(pred['T_r2q_opt']):
             err = scaled_pose_error(T_opt)
-            metrics[f'R_error/{i}'], metrics[f't_error/{i}'] = err
+            metrics[f'R_error/{i}'], metrics[f't_error/{i}'] = err            
             
         metrics['R_error'], metrics['t_error'] = err
 

@@ -211,8 +211,8 @@ class UNet(BaseModel):
     features = block(features)
     skip_features.append(features)
     
-    
-    
+    pred['feature_maps'] = out_features
+    pred['confidences'] = confidences
     """
     def _forward(self, data):
         image = data['image']
@@ -237,14 +237,14 @@ class UNet(BaseModel):
 
         out_features = []
         for adapt, i in zip(self.adaptation, self.conf.output_scales):
-            out_features.append(adapt(pre_features[i]))
+            out_features.append(adapt(pre_features[i])) # AdaptationBlock(input_, dim)
             
         pred = {'feature_maps': out_features}
 
         if self.conf.compute_uncertainty:
             confidences = []
             for layer, i in zip(self.uncertainty, self.conf.output_scales):
-                unc = layer(pre_features[i])
+                unc = layer(pre_features[i]) # AdaptationBlock(input_, 1)
                 conf = torch.sigmoid(-unc)
                 confidences.append(conf)
                 

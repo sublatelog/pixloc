@@ -22,8 +22,8 @@ class CMU(BaseDataset):
         'dataset_dir': 'CMU/',
         'info_dir': 'cmu_pixloc_training/',
 
-        'train_slices': [8, 9, 10, 11, 12, 22, 23, 24, 25],
-        'val_slices': [6, 13, 21],
+        'train_slices': [8, 9] # [8, 9, 10, 11, 12, 22, 23, 24, 25],
+        'val_slices': [6,] # [6, 13, 21],
         'train_num_per_slice': 1000,
         'val_num_per_slice': 80,
 

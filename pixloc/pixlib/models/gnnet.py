@@ -55,7 +55,9 @@ class GNNet(BaseModel):
 
     def _init(self, conf):
         self.extractor = get_model(conf.extractor.name)(conf.extractor)
+        
         assert hasattr(self.extractor, 'scales')
+        
         self.optimizer = get_model(conf.optimizer.name)(conf.optimizer)
 
     def contrastive_loss(self, F0_p, F1_p, F1, pts1):
@@ -68,15 +70,17 @@ class GNNet(BaseModel):
         c, h, w = F1.shape[-3:]
         if self.conf.loss.windowed_negative_sampling:
             radius = self.conf.loss.ratio_radius_negative * max(h, w)
-            mask_x = torch.abs(torch.arange(w, device=pts1.device)[None, None]
-                               - pts1[..., :1]) < radius
-            mask_y = torch.abs(torch.arange(h, device=pts1.device)[None, None]
-                               - pts1[..., 1:]) < radius
+            
+            mask_x = torch.abs(torch.arange(w, device=pts1.device)[None, None] - pts1[..., :1]) < radius            
+            mask_y = torch.abs(torch.arange(h, device=pts1.device)[None, None] - pts1[..., 1:]) < radius
+            
             mask_neg = mask_x[..., None, :] & mask_y[..., None]
             all_dist_neg.masked_fill_(mask_neg, float('inf'))
+            
         all_dist_neg = all_dist_neg.reshape(all_dist_neg.shape[:-2]+(-1,))
 
         n = self.conf.loss.num_top_negative_sampling
+        
         if n > 0:
             inds = torch.topk(all_dist_neg, n, dim=-1, largest=False).indices
             sampled = torch.randint_like(inds[..., 0], high=n)
@@ -87,10 +91,11 @@ class GNNet(BaseModel):
             inds = inds.to(all_dist_neg.device)
 
         # For an unknown reason, gather generates huge grad tensor,
-        # resulting in OOM, while indexing works just fine.
+        # resulting in OOM, while indexing works just fine.        
         inds = torch.stack([inds // w, inds % w], -1)  # y, x
-        F1_neg = torch.stack([F.permute(1, 2, 0)[tuple(i.T)]
-                              for F, i in zip(F1, inds)], 0)
+        
+        F1_neg = torch.stack([F.permute(1, 2, 0)[tuple(i.T)] for F, i in zip(F1, inds)], 0)
+        
         # F1_neg = F1.reshape(-1, 1, c, h*w).expand(inds.shape + (-1, -1))
         # inds = inds[..., None, None].expand(-1, -1, c, 1)
         # F1_neg = F1_neg.gather(-1, inds).squeeze(-1)
@@ -98,8 +103,10 @@ class GNNet(BaseModel):
         # Different formulation in GN-Net vs LM-Reloc: square after or before.
         # Here we pick the formulation of LM-Reloc.
         dist_neg = torch.sum((F0_p - F1_neg)**2, -1)
+        
         # dist_neg = torch.norm(F0_p - F1_neg, p=2, dim=-1)
         loss_neg = torch.clamp(self.conf.loss.margin_negative-dist_neg, min=0)
+        
         # loss_neg = loss_neg**2
         return loss_pos + loss_neg
 
@@ -108,7 +115,12 @@ class GNNet(BaseModel):
         pts0_noise = pts0 + noise * self.conf.loss.gauss_newton_magnitude
 
         F0_noise, mask_noise, J = interpolate_tensor(
-                F0, pts0_noise, pad=4, return_gradients=True)
+                                                    F0, 
+                                                    pts0_noise, 
+                                                    pad=4, 
+                                                    return_gradients=True
+                                                    )
+        
         residuals = F0_noise - F1_p
 
         H = torch.einsum('...dp,...dq->...pq', J, J)
@@ -117,6 +129,7 @@ class GNNet(BaseModel):
 
         H = torch.where(mask[..., None, None], H, torch.eye(H.shape[-1]).to(H))
         H_, g_ = H.cpu(), g.cpu()
+        
         try:
             U = torch.cholesky(H_, upper=True)
         except Exception as e:  # noqa: F841
@@ -136,8 +149,8 @@ class GNNet(BaseModel):
     def _forward(self, data):
         def process_siamese(data_i):
             pred_i = self.extractor(data_i)
-            pred_i['camera_pyr'] = [data_i['camera'].scale(1/s)
-                                    for s in self.extractor.scales]
+            pred_i['camera_pyr'] = [data_i['camera'].scale(1/s) for s in self.extractor.scales]
+            
             return pred_i
 
         pred = {i: process_siamese(data[i]) for i in ['ref', 'query']}
@@ -148,6 +161,7 @@ class GNNet(BaseModel):
         p3D_q = data['T_r2q_gt'] * p3D_r
         contrastive_losses = []
         gn_losses = []
+        
         for i in range(len(self.extractor.scales)):
             Fr = pred['ref']['feature_maps'][i]
             Fq = pred['query']['feature_maps'][i]
@@ -165,17 +179,17 @@ class GNNet(BaseModel):
             Fq_p, valid_q, _ = interpolate_tensor(Fq, p2D_q, pad=4)
             valid = visible_r & visible_q & valid_r & valid_q
 
-            gn0, valid_0_noise = self.gauss_newton_loss(Fr_p, Fq_p, Fr,
-                                                        p2D_r, valid)
+            gn0, valid_0_noise = self.gauss_newton_loss(Fr_p, Fq_p, Fr, p2D_r, valid)
             contrastive0 = self.contrastive_loss(Fr_p, Fq_p, Fq, p2D_q)
 
-            gn1, valid_1_noise = self.gauss_newton_loss(Fq_p, Fr_p, Fq,
-                                                        p2D_q, valid)
+            gn1, valid_1_noise = self.gauss_newton_loss(Fq_p, Fr_p, Fq, p2D_q, valid)
             contrastive1 = self.contrastive_loss(Fq_p, Fr_p, Fr, p2D_r)
 
             gn0 = masked_mean(gn0, valid & valid_0_noise, -1)
             gn1 = masked_mean(gn1, valid & valid_1_noise, -1)
+            
             gn_loss = (gn0 + gn1) / 2
+            
             contrastive = masked_mean((contrastive0+contrastive1)/2, valid, -1)
 
             gn_losses.append(gn_loss)
@@ -187,6 +201,7 @@ class GNNet(BaseModel):
         total = 0.
         if self.conf.loss.gauss_newton_weight > 0:
             total += self.conf.loss.gauss_newton_weight * gn_loss
+            
         if self.conf.loss.contrastive_weight > 0:
             total += self.conf.loss.contrastive_weight * contrastive
 
@@ -233,10 +248,12 @@ class GNNet(BaseModel):
             return err_R, err_t
 
         metrics = {}
+        
         # Compute pose errors
         for i, T_opt in enumerate(T_r2q_opt):
             err = scaled_pose_error(T_opt)
             metrics[f'R_error/{i}'], metrics[f't_error/{i}'] = err
+            
         metrics['R_error'], metrics['t_error'] = err
         err_init = scaled_pose_error(T_r2q_init[0])
         metrics['R_error/init'], metrics['t_error/init'] = err_init
@@ -258,6 +275,7 @@ class GNNet(BaseModel):
         for i, T_opt in enumerate(T_r2q_opt):
             err = reprojection_error(T_opt).clamp(max=50)
             metrics[f'loss/reprojection_error/{i}'] = err
+            
         metrics['loss/reprojection_error'] = err
 
         err_init = reprojection_error(T_r2q_init[0])

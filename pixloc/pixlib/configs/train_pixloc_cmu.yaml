@@ -10,7 +10,7 @@ data:
   crop: 720
   optimal_crop: false
   batch_size: 3
-  num_workers: 6
+  num_workers: 2
   seed: 1
 model:
   name: two_view_refiner

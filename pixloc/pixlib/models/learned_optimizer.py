@@ -58,6 +58,7 @@ class LearnedOptimizer(BaseOptimizer):
 
         """
         p3D
+        torch.Size([1, 512, 3])
         tensor([[[ -3.4736,  -1.1382,  17.3129],
                  [-18.7738,  -6.7321,  39.3825],
                  [ -1.7312,   1.9992,   9.2566],
@@ -67,12 +68,15 @@ class LearnedOptimizer(BaseOptimizer):
                  [-13.0297,   0.9339,  28.3888]]], device='cuda:0')
                  
         T_init
+        torch.Size([1])
         Pose: torch.Size([1]) torch.float32 cuda:0
         
         camera
+        torch.Size([1])
         Camera torch.Size([1]) torch.float32 cuda:0
         
-        W_ref_query
+        W_ref_query[0]
+        torch.Size([1, 512, 1])
         (tensor([[[0.6974],
                  [0.7410],
                  [0.7573],
@@ -84,6 +88,8 @@ class LearnedOptimizer(BaseOptimizer):
                  [0.6243],
                  [0.6669],
                  
+        W_ref_query[1]
+        torch.Size([1, 1, 45, 45])         
         tensor([[[[0.7303, 0.6751, 0.7109,  ..., 0.6711, 0.8203, 0.7823],
                   [0.7899, 0.7414, 0.7441,  ..., 0.6336, 0.8918, 0.6993],
                   [0.7736, 0.8314, 0.6970,  ..., 0.7183, 0.7811, 0.7448],
@@ -92,16 +98,7 @@ class LearnedOptimizer(BaseOptimizer):
                   
                   
         """
-        print("p3D")
-        print(p3D.shape)
-        print("T_init")
-        print(T_init.shape)
-        print("camera")
-        print(camera.shape)
-        print("W_ref_query")
-        print(W_ref_query[0].shape)
-        print(W_ref_query[1].shape)
-        
+      
         
         T = T_init
         J_scaling = None
@@ -118,6 +115,7 @@ class LearnedOptimizer(BaseOptimizer):
             
             """
             res
+            torch.Size([1, 512, 128])
             tensor([[[-0.1436, -0.1194,  0.0304,  ..., -0.1115, -0.0853,  0.0285],
                      [-0.0686,  0.0023,  0.0738,  ...,  0.0321,  0.0378, -0.0951],
                      [ 0.0402,  0.0589,  0.0306,  ..., -0.0885,  0.1199,  0.0130],
@@ -128,6 +126,7 @@ class LearnedOptimizer(BaseOptimizer):
                    device='cuda:0')
                    
             valid
+            torch.Size([1, 512])
             tensor([[ True,  True,  True,  True,  True,  True, False,  True,  True,  True,
                       True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
                       True,  True,  True, False,  True,  True,  True,  True,  True,  True,
@@ -137,6 +136,7 @@ class LearnedOptimizer(BaseOptimizer):
                      False,  True,  True,  True,  True,  True,  True,  True,  True,  True,
                      
             w_unc
+            torch.Size([1, 512])
             tensor([[0.4777, 0.5401, 0.4450, 0.3916, 0.5184, 0.5744, 0.0000, 0.4875, 0.5237,
                      0.5372, 0.4048, 0.3982, 0.5854, 0.4604, 0.4574, 0.5753, 0.4767, 0.4203,
                      0.3708, 0.4456, 0.3526, 0.4879, 0.3846, 0.0000, 0.4192, 0.4770, 0.3175,
@@ -145,6 +145,7 @@ class LearnedOptimizer(BaseOptimizer):
                      0.5015, 0.5190, 0.5201, 0.6604, 0.4813, 0.3981, 0.5150, 0.3686, 0.3549,
             
             J
+            torch.Size([1, 512, 128, 6])
             tensor([[[[ 2.0140e-01,  9.0354e-01,  1.0955e-01, -1.5505e+01,  3.8853e+00,
                        -3.5399e+00],
                       [ 3.0879e-01,  3.0742e-01,  9.6141e-02, -5.3422e+00,  5.6573e+00,
@@ -159,16 +160,7 @@ class LearnedOptimizer(BaseOptimizer):
                       [ 1.5818e-01,  4.0377e-01,  6.5661e-02, -6.9477e+00,  2.9664e+00,
                        -1.5046e+00]],
             """
-            
-            print("res")
-            print(res.shape)
-            print("valid")
-            print(valid.shape)
-            print("w_unc")
-            print(w_unc.shape)
-            print("J")
-            print(J.shape)
-            
+
             if mask is not None:
                 valid &= mask
                 
@@ -176,6 +168,12 @@ class LearnedOptimizer(BaseOptimizer):
 
             # compute the cost and aggregate the weights
             cost = (res**2).sum(-1)
+            
+            print("cost")
+            print(cost)
+            print(cost.shape)
+            
+            
             cost, w_loss, _ = self.loss_fn(cost)
             weights = w_loss * valid.float()
             
@@ -188,15 +186,51 @@ class LearnedOptimizer(BaseOptimizer):
             # solve the linear system
             g, H = self.build_system(J, res, weights)
             
+            print("H")
+            print(H)
+            print(H.shape)
+            
+            
+            print("g")
+            print(g)
+            print(g.shape)
+            
             delta = optimizer_step(g, H, lambda_, mask=~failed)
+            
+            
+            
+            print("delta")
+            print(delta)
+            print(delta.shape)
             
             if self.conf.jacobi_scaling:
                 delta = delta * J_scaling
 
             # compute the pose update
             dt, dw = delta.split([3, 3], dim=-1)
+            
+            
+            print("dt")
+            print(dt)
+            print(dt.shape)
+            
+            print("dw")
+            print(dw)
+            print(dw.shape)
+            
             T_delta = Pose.from_aa(dw, dt)
+            
+            
+            print("T_delta")
+            print(T_delta)
+            print(T_delta.shape)
+            
             T = T_delta @ T
+            
+            
+            print("T")
+            print(T)
+            print(T.shape)
 
             self.log(i=i, T_init=T_init, T=T, T_delta=T_delta, cost=cost, valid=valid, w_unc=w_unc, w_loss=w_loss, H=H, J=J)
             

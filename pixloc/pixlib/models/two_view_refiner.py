@@ -48,11 +48,13 @@ class TwoViewRefiner(BaseModel):
 
     def _init(self, conf):
         
+         """
+        conf.extractor.name
+        unet
+        """        
         # extractor ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ----------
         self.extractor = get_model(conf.extractor.name)(conf.extractor)
-        
-        print("conf.extractor.name")
-        print(conf.extractor.name)
+       
         
         assert hasattr(self.extractor, 'scales')
 

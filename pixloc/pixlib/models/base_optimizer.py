@@ -44,8 +44,12 @@ class BaseOptimizer(BaseModel):
     logging_fn = None
 
     def _init(self, conf):
-        self.loss_fn = eval('losses.' + conf.loss_fn)
-        self.interpolator = Interpolator(**conf.interpolation)
+        
+        # scaled_barron
+        self.loss_fn = eval('losses.' + conf.loss_fn) # conf.loss_fn:scaled_barron(0, 0.1)
+        
+        self.interpolator = Interpolator(**conf.interpolation) # mode='linear', pad=4
+        
         self.cost_fn = DirectAbsoluteCost(self.interpolator, normalize=conf.normalize_features)
         
         assert conf.lambda_ >= 0.

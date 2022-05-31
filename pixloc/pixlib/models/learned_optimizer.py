@@ -56,6 +56,16 @@ class LearnedOptimizer(BaseOptimizer):
              W_ref_query: Optional[Tuple[Tensor, Tensor]] = None
             ):
 
+        print("p3D")
+        print(p3D)
+        print("T_init")
+        print(T_init)
+        print("camera")
+        print(camera)
+        print("W_ref_query")
+        print(W_ref_query)
+        
+        
         T = T_init
         J_scaling = None
         if self.conf.normalize_features:
@@ -68,6 +78,15 @@ class LearnedOptimizer(BaseOptimizer):
 
         for i in range(self.conf.num_iters):
             res, valid, w_unc, _, J = self.cost_fn.residual_jacobian(T, *args)
+            
+            print("res")
+            print(res)
+            print("valid")
+            print(valid)
+            print("w_unc")
+            print(w_unc)
+            print("J")
+            print(J)
             
             if mask is not None:
                 valid &= mask

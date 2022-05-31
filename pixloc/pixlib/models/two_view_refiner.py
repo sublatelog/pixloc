@@ -48,7 +48,7 @@ class TwoViewRefiner(BaseModel):
 
     def _init(self, conf):
         
-         """
+        """
         conf.extractor.name
         unet
         """        

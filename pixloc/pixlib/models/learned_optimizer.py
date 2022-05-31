@@ -99,7 +99,8 @@ class LearnedOptimizer(BaseOptimizer):
         print("camera")
         print(camera.shape)
         print("W_ref_query")
-        print(W_ref_query.shape)
+        print(W_ref_query[0].shape)
+        print(W_ref_query[1].shape)
         
         
         T = T_init

@@ -196,10 +196,11 @@ def interpolate_tensor(tensor,
     return interpolated, mask, gradients
 
 
+
 class Interpolator:
     def __init__(self, mode: str = 'linear', pad: int = 1):
-        self.mode = mode
-        self.pad = pad
+        self.mode = mode # mode='linear'
+        self.pad = pad # pad=4
 
     def __call__(self, 
                  tensor: torch.Tensor, 

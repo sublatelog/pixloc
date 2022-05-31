@@ -168,13 +168,18 @@ class LearnedOptimizer(BaseOptimizer):
 
             # compute the cost and aggregate the weights
             cost = (res**2).sum(-1)
+            """
+            cost
+            torch.Size([1, 512])
+            tensor([[1.4755, 0.8576, 0.4583, 1.1815, 0.5253, 0.3162, 0.4119, 1.0000, 0.9488,
+                     0.8108, 0.6451, 0.1085, 1.0354, 0.0958, 0.9410, 0.9886, 0.4672, 0.6639,
+                     0.7014, 0.4685, 0.7526, 0.3535, 0.9340, 0.5851, 0.5998, 0.3519, 0.5759,
+                     0.3000, 0.9304, 0.8004, 0.2394, 0.3165, 0.4642, 0.8073, 0.3259, 0.3442,
+                     1.0104, 0.4322, 0.5906, 0.1634, 0.6163, 1.0000, 0.6134, 0.3070, 0.8637,
+                     0.7015, 0.4759, 0.7849, 0.5888, 0.4939, 0.8123, 0.7722, 1.5349, 0.4062,
+            """            
             
-            print("cost")
-            print(cost)
-            print(cost.shape)
-            
-            
-            cost, w_loss, _ = self.loss_fn(cost)
+            cost, w_loss, _ = self.loss_fn(cost) # ------------------------------------------------------------------
             weights = w_loss * valid.float()
             
             if w_unc is not None:
@@ -184,24 +189,38 @@ class LearnedOptimizer(BaseOptimizer):
                 J, J_scaling = self.J_scaling(J, J_scaling, valid)
 
             # solve the linear system
-            g, H = self.build_system(J, res, weights)
+            g, H = self.build_system(J, res, weights) # ------------------------------------------------------------------
             
-            print("H")
-            print(H)
-            print(H.shape)
-            
-            
-            print("g")
-            print(g)
-            print(g.shape)
-            
+            """
+            H
+            torch.Size([1, 6, 6])
+            tensor([[[ 2.1294e+02, -4.3363e+00,  2.4412e+01,  2.4173e+02,  4.7899e+03,
+                       4.4557e+02],
+                     [-4.3363e+00,  4.2387e+02, -4.0243e+01, -7.7276e+03, -3.1528e+02,
+                      -1.1980e+03],
+                     [ 2.4412e+01, -4.0243e+01,  2.9982e+01,  1.0184e+02,  7.1605e+02,
+                       7.3547e+01],
+                     [ 2.4173e+02, -7.7276e+03,  1.0184e+02,  1.9892e+05,  6.8424e+03,
+                       3.9637e+04],
+                     [ 4.7899e+03, -3.1528e+02,  7.1605e+02,  6.8424e+03,  1.5491e+05,
+                       2.1734e+04],
+                     [ 4.4557e+02, -1.1980e+03,  7.3547e+01,  3.9637e+04,  2.1734e+04,
+                       2.8366e+04]]], device='cuda:0')
+
+            g
+            torch.Size([1, 6])
+            tensor([[ -1.2143,  -0.4991,  -0.2816,   7.5308, -43.3209,  -5.3110]], device='cuda:0')            
+            """            
+           
             delta = optimizer_step(g, H, lambda_, mask=~failed)
             
+            """
+            delta
+            torch.Size([1, 6])
+            tensor([[ 9.5736e-04,  1.4428e-03,  4.8511e-03, -4.7008e-06,  1.6732e-04, 7.5154e-05]], device='cuda:0')
+
+            """
             
-            
-            print("delta")
-            print(delta)
-            print(delta.shape)
             
             if self.conf.jacobi_scaling:
                 delta = delta * J_scaling
@@ -209,28 +228,34 @@ class LearnedOptimizer(BaseOptimizer):
             # compute the pose update
             dt, dw = delta.split([3, 3], dim=-1)
             
+            """
+            dt
+            tensor([[0.0010, 0.0014, 0.0049]], device='cuda:0')
+            torch.Size([1, 3])
             
-            print("dt")
-            print(dt)
-            print(dt.shape)
+            dw
+            tensor([[-4.7008e-06,  1.6732e-04,  7.5154e-05]], device='cuda:0')
+            torch.Size([1, 3])
+            """
             
-            print("dw")
-            print(dw)
-            print(dw.shape)
+            # dw: axis-angle rotation vector with shape (..., 3).
+            # dt: translation vector with shape (..., 3).
+            T_delta = Pose.from_aa(dw, dt) # ------------------------------------------------------------------
             
-            T_delta = Pose.from_aa(dw, dt)
-            
-            
-            print("T_delta")
-            print(T_delta)
-            print(T_delta.shape)
+            """
+            T_delta
+            Pose: torch.Size([1]) torch.float32 cuda:0
+            torch.Size([1])            
+            """
+
             
             T = T_delta @ T
             
-            
-            print("T")
-            print(T)
-            print(T.shape)
+            """
+            T
+            Pose: torch.Size([1]) torch.float32 cuda:0
+            torch.Size([1])
+            """
 
             self.log(i=i, T_init=T_init, T=T, T_delta=T_delta, cost=cost, valid=valid, w_unc=w_unc, w_loss=w_loss, H=H, J=J)
             

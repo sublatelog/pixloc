@@ -61,15 +61,27 @@ def get_class(mod_name, base_path, BaseClass):
     # Filter classes defined in the module
     classes = [c for c in classes if c[1].__module__ == mod_path]
     
-    print("classes_0")
-    print(classes)
+    """
+    classes_0
+    [('CMU', <class 'pixloc.pixlib.datasets.cmu.CMU'>), ('_Dataset', <class 'pixloc.pixlib.datasets.cmu._Dataset'>)]
+    [('TwoViewRefiner', <class 'pixloc.pixlib.models.two_view_refiner.TwoViewRefiner'>)]
+    [('AdaptationBlock', <class 'pixloc.pixlib.models.unet.AdaptationBlock'>), ('DecoderBlock', <class 'pixloc.pixlib.models.unet.DecoderBlock'>), ('UNet', <class 'pixloc.pixlib.models.unet.UNet'>)]
+    [('DampingNet', <class 'pixloc.pixlib.models.learned_optimizer.DampingNet'>), ('LearnedOptimizer', <class 'pixloc.pixlib.models.learned_optimizer.LearnedOptimizer'>)]
+    
+    """
+
+
     
     # Filter classes inherited from BaseModel
     classes = [c for c in classes if issubclass(c[1], BaseClass)]
     
-    
-    print("classes_1")
-    print(classes)
+    """
+    classes_1
+    [('CMU', <class 'pixloc.pixlib.datasets.cmu.CMU'>)]
+    [('TwoViewRefiner', <class 'pixloc.pixlib.models.two_view_refiner.TwoViewRefiner'>)]
+    [('UNet', <class 'pixloc.pixlib.models.unet.UNet'>)]
+    [('LearnedOptimizer', <class 'pixloc.pixlib.models.learned_optimizer.LearnedOptimizer'>)]
+    """
     
     assert len(classes) == 1, classes
     

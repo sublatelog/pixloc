@@ -55,6 +55,16 @@ class LearnedOptimizer(BaseOptimizer):
              mask: Optional[Tensor] = None,
              W_ref_query: Optional[Tuple[Tensor, Tensor]] = None
             ):
+        
+        print("F_ref")
+        print(F_ref)
+        print(F_ref.shape()
+        print("F_query")
+        print(F_query)
+        print(F_query.shape()
+        
+        print(T_init)    
+        print(camera)      
 
         """
         p3D

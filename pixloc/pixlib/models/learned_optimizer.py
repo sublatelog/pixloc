@@ -135,6 +135,7 @@ class LearnedOptimizer(BaseOptimizer):
         lambda_ = self.dampingnet()
 
         for i in range(self.conf.num_iters):
+            # DirectAbsoluteCost.residual_jacobian(T, camera, p3D, F_ref, F_query, W_ref_query)=residuals() + jacobian()
             res, valid, w_unc, _, J = self.cost_fn.residual_jacobian(T, *args)
             
             """
@@ -188,6 +189,7 @@ class LearnedOptimizer(BaseOptimizer):
             if mask is not None:
                 valid &= mask
                 
+            # 少なすぎる箇所はfailed
             failed = failed | (valid.long().sum(-1) < 10)  # too few points
 
             # compute the cost and aggregate the weights
@@ -203,7 +205,10 @@ class LearnedOptimizer(BaseOptimizer):
                      0.7015, 0.4759, 0.7849, 0.5888, 0.4939, 0.8123, 0.7722, 1.5349, 0.4062,
             """            
             
-            cost, w_loss, _ = self.loss_fn(cost) # ------------------------------------------------------------------
+            # loss, loss_d1
+            # cost   : 2 * torch.log1p(torch.clamp(0.5*x, max=33e37))
+            # w_loss : 2 / (x + 2)
+            cost, w_loss, _ = self.loss_fn(cost)
             weights = w_loss * valid.float()
             
             if w_unc is not None:
@@ -213,6 +218,8 @@ class LearnedOptimizer(BaseOptimizer):
                 J, J_scaling = self.J_scaling(J, J_scaling, valid)
 
             # solve the linear system
+            # grad : sum((J @ res) * weights, -2)
+            # Hess : sum((J @ J) * weights, -3)
             g, H = self.build_system(J, res, weights) # ------------------------------------------------------------------
             
             """
@@ -236,6 +243,7 @@ class LearnedOptimizer(BaseOptimizer):
             tensor([[ -1.2143,  -0.4991,  -0.2816,   7.5308, -43.3209,  -5.3110]], device='cuda:0')            
             """            
            
+            # lambda_ = 10.**(-6 + self.const.sigmoid()*(5 - (-6)))
             delta = optimizer_step(g, H, lambda_, mask=~failed)
             
             """
@@ -250,7 +258,7 @@ class LearnedOptimizer(BaseOptimizer):
                 delta = delta * J_scaling
 
             # compute the pose update
-            dt, dw = delta.split([3, 3], dim=-1)
+            dt, dw = delta.split([3, 3], dim=-1) # 3対3に分ける
             
             """
             dt

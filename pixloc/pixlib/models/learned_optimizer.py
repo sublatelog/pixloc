@@ -53,7 +53,7 @@ class LearnedOptimizer(BaseOptimizer):
              T_init: Pose,
              camera: Camera, 
              mask: Optional[Tensor] = None,
-             W_ref_query: Optional[Tuple[Tensor, Tensor]] = None
+             W_ref_query: Optional[Tuple[Tensor, Tensor]] = None # confidences
             ):
 
         """
@@ -136,6 +136,7 @@ class LearnedOptimizer(BaseOptimizer):
 
         for i in range(self.conf.num_iters):
             # DirectAbsoluteCost.residual_jacobian(T, camera, p3D, F_ref, F_query, W_ref_query)=residuals() + jacobian()
+            # res, valid, weight, F_p2D, J
             res, valid, w_unc, _, J = self.cost_fn.residual_jacobian(T, *args)
             
             """

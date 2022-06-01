@@ -27,13 +27,56 @@ class DirectAbsoluteCost:
                     do_gradients: bool = False
                 ):
 
+        print("T_w2q")
+        print(T_w2q.shape)
+        print(T_w2q)
+        
+        
+        print("p3D")
+        print(p3D.shape)
+        print(p3D)
+        
+        
+        print("p3D_q")
+        print(p3D_q.shape)
+        print(p3D_q)
+        
         p3D_q = T_w2q * p3D
         p2D, visible = camera.world2image(p3D_q)
+        
+        
+        print("p2D")
+        print(p2D.shape)
+        print(p2D)
+        
+        
+        print("visible")
+        print(visible.shape)
+        print(visible)
+        
+        
         F_p2D_raw, valid, gradients = self.interpolator(
                                                         F_query, 
                                                         p2D, 
                                                         return_gradients=do_gradients
                                                         )
+        
+        
+        
+        print("F_p2D_raw")
+        print(F_p2D_raw.shape)
+        print(F_p2D_raw)
+        
+        print("valid")
+        print(valid.shape)
+        print(visible)
+        
+        print("gradients")
+        print(gradients.shape)
+        print(gradients)
+        
+        
+        
         valid = valid & visible
 
         if confidences is not None:
@@ -74,7 +117,20 @@ class DirectAbsoluteCost:
         if self.normalize:
             J_f_p2D = J_normalization(F_p2D_raw) @ J_f_p2D
 
+        print("J_p2D_p3D")
+        print(J_p2D_p3D.shape)
+        print(J_p2D_p3D)
+        
+        print("J_p3D_T")
+        print(J_p3D_T.shape)
+        print(J_p3D_T)
+            
         J_p2D_T = J_p2D_p3D @ J_p3D_T
+        
+        print("J_p2D_T")
+        print(J_p2D_T.shape)
+        print(J_p2D_T)
+        
         J = J_f_p2D @ J_p2D_T
         
         return J, J_p2D_T

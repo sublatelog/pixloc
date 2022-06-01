@@ -37,11 +37,14 @@ class DirectAbsoluteCost:
         print(p3D)
         
         
+        
+        p3D_q = T_w2q * p3D
+        
+        
         print("p3D_q")
         print(p3D_q.shape)
         print(p3D_q)
         
-        p3D_q = T_w2q * p3D
         p2D, visible = camera.world2image(p3D_q)
         
         

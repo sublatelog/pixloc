@@ -58,10 +58,10 @@ class LearnedOptimizer(BaseOptimizer):
         
         print("F_ref")
         print(F_ref)
-        print(F_ref.shape()
+        print(F_ref.shape())
         print("F_query")
         print(F_query)
-        print(F_query.shape()
+        print(F_query.shape())
         
         print(T_init)    
         print(camera)      
